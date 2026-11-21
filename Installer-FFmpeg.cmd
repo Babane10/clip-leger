@@ -2,14 +2,14 @@
 setlocal
 pushd "%~dp0" || exit /b 1
 if exist "ffmpeg.exe" (
-    echo FFmpeg est deja disponible. Tu peux lancer ClipLeger.exe.
+    echo FFmpeg est deja disponible. Tu peux lancer FileFit.exe.
     pause
     popd
     exit /b 0
 )
 
 set "CLIP_FFMPEG_URL=https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.7z"
-set "CLIP_SETUP_DIR=%TEMP%\ClipLeger-FFmpeg-%RANDOM%-%RANDOM%"
+set "CLIP_SETUP_DIR=%TEMP%\FileFit-FFmpeg-%RANDOM%-%RANDOM%"
 mkdir "%CLIP_SETUP_DIR%" || goto :error
 echo Telechargement de FFmpeg depuis gyan.dev...
 curl.exe --proto "=https" --proto-redir "=https" --fail --show-error --silent --location --connect-timeout 15 --max-time 300 --output "%CLIP_SETUP_DIR%\archive.7z" "%CLIP_FFMPEG_URL%" || goto :cleanup_error
@@ -22,7 +22,7 @@ if not exist "%CLIP_SETUP_DIR%\ffmpeg.exe" goto :cleanup_error
 if not exist "ffmpeg.exe" copy /-Y "%CLIP_SETUP_DIR%\ffmpeg.exe" "ffmpeg.exe" <nul >nul || goto :cleanup_error
 call :cleanup
 
-echo FFmpeg est pret. Tu peux lancer ClipLeger.exe.
+echo FFmpeg est pret. Tu peux lancer FileFit.exe.
 pause
 popd
 exit /b 0

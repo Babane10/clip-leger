@@ -1,6 +1,6 @@
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Clip Léger" Width="720" Height="706" MinWidth="490" MinHeight="440"
+        Title="FileFit" Width="720" Height="746" MinWidth="490" MinHeight="465"
         WindowStartupLocation="CenterScreen" Background="#111519" Foreground="#F0F4F3"
         FontFamily="Segoe UI" FontSize="14" UseLayoutRounding="True">
   <Window.Resources>
@@ -48,48 +48,83 @@
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="CornerRadius" Value="12"/>
     </Style>
+    <Style x:Key="ModeButton" TargetType="RadioButton">
+      <Setter Property="Foreground" Value="#A8B5B7"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="MinHeight" Value="39"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RadioButton">
+            <Border x:Name="Chip" CornerRadius="7" BorderThickness="1" BorderBrush="Transparent" Background="Transparent" Padding="6,7">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chip" Property="Background" Value="#2B363A"/></Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter Property="Foreground" Value="{StaticResource Accent}"/>
+                <Setter TargetName="Chip" Property="Background" Value="#263A34"/>
+                <Setter TargetName="Chip" Property="BorderBrush" Value="#46645A"/>
+              </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Chip" Property="BorderBrush" Value="#F0FAFF"/></Trigger>
+              <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Chip" Property="Opacity" Value=".55"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
   </Window.Resources>
   <ScrollViewer Background="#111519" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
-    <StackPanel Margin="32,25,32,24">
-      <Grid Margin="0,0,0,22">
+    <StackPanel Margin="32,25,32,16">
+      <Grid Margin="0,0,0,17">
         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
         <Border Width="46" Height="46" Background="#253C34" CornerRadius="11" VerticalAlignment="Center">
-          <TextBlock Text="&#xE714;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource Accent}" FontSize="21"
+          <TextBlock Text="&#xE7B8;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource Accent}" FontSize="21"
                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
         <StackPanel Grid.Column="1" Margin="13,0,0,0">
-          <TextBlock Text="Clip Léger" FontSize="32" FontWeight="Bold"/>
-          <TextBlock Text="Compresse tes vidéos pour Discord" Margin="0,2,0,0" Foreground="{StaticResource Muted}"/>
+          <TextBlock Text="FileFit" FontSize="32" FontWeight="Bold"/>
+          <TextBlock Text="Compresse et convertis tes fichiers" Margin="0,2,0,0" Foreground="{StaticResource Muted}"/>
         </StackPanel>
       </Grid>
+
+      <Border Style="{StaticResource Panel}" Padding="4" Margin="0,0,0,14" CornerRadius="10">
+        <UniformGrid Columns="4" Rows="1">
+          <RadioButton x:Name="ModeVideo" Style="{StaticResource ModeButton}" GroupName="MediaMode" Content="Vidéo" IsChecked="True"/>
+          <RadioButton x:Name="ModePhoto" Style="{StaticResource ModeButton}" GroupName="MediaMode" Content="Photo"/>
+          <RadioButton x:Name="ModeAudio" Style="{StaticResource ModeButton}" GroupName="MediaMode" Content="Audio"/>
+          <RadioButton x:Name="ModeExtract" Style="{StaticResource ModeButton}" GroupName="MediaMode" Content="Vidéo → MP3"
+                       AutomationProperties.Name="Extraire le son d’une vidéo en MP3"/>
+        </UniformGrid>
+      </Border>
 
       <Border x:Name="DropZone" AllowDrop="True" CornerRadius="12" BorderThickness="1" BorderBrush="#46645A" Background="#1A2827" Padding="20,18" MinHeight="100">
         <Grid>
           <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
           <StackPanel VerticalAlignment="Center" Margin="0,0,14,0">
-            <TextBlock x:Name="VideoTitle" Text="Dépose ta vidéo ici" FontSize="18" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-            <TextBlock x:Name="VideoDetails" Text="MP4, MOV, MKV, WebM…" Foreground="{StaticResource Muted}" Margin="0,5,0,0" TextWrapping="Wrap"/>
+            <TextBlock x:Name="SourceTitle" Text="Dépose ta vidéo ici" FontSize="18" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+            <TextBlock x:Name="SourceDetails" Text="MP4, MOV, MKV, WebM…" Foreground="{StaticResource Muted}" Margin="0,5,0,0" TextWrapping="Wrap"/>
           </StackPanel>
-          <Button x:Name="SelectVideo" Grid.Column="1" Content="_Choisir une vidéo" VerticalAlignment="Center"/>
+          <Button x:Name="SelectFile" Grid.Column="1" Content="_Choisir un fichier" VerticalAlignment="Center"/>
         </Grid>
       </Border>
 
       <Border Style="{StaticResource Panel}" Padding="20,16" Margin="0,14,0,0">
         <StackPanel>
-          <TextBlock Text="Taille maximale" FontSize="16" FontWeight="SemiBold"/>
-          <WrapPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,10,0,4">
-            <Button x:Name="Preset20" Content="20 Mo" Margin="0,0,7,5" ToolTip="Discord gratuit"/>
-            <Button x:Name="Preset50" Content="50 Mo" Margin="0,0,7,5" ToolTip="Nitro Basic"/>
-            <Button x:Name="Preset1000" Content="1 Go" Margin="0,0,15,5" ToolTip="Nitro"/>
+          <TextBlock x:Name="OptionsTitle" Text="Taille maximale" FontSize="16" FontWeight="SemiBold"/>
+          <WrapPanel x:Name="SizeControls" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,10,0,4">
+            <Button x:Name="PresetFirst" Margin="0,0,7,5"/>
+            <Button x:Name="PresetSecond" Margin="0,0,7,5"/>
+            <Button x:Name="PresetThird" Margin="0,0,15,5"/>
             <Border BorderBrush="{StaticResource Edge}" BorderThickness="1" CornerRadius="7" Margin="0,0,0,5" Height="36" Background="#141A1F">
               <StackPanel Orientation="Horizontal">
-                <TextBox x:Name="Limit" Text="20" Width="72" MaxLength="8" Margin="8,0,0,0" Padding="4,0" BorderThickness="0" Background="Transparent"
+                <TextBox x:Name="Limit" Width="76" MaxLength="10" Margin="8,0,0,0" Padding="4,0" BorderThickness="0" Background="Transparent"
                          CaretBrush="#FFFFFF" Foreground="#F0F4F3" VerticalContentAlignment="Center" AutomationProperties.Name="Taille maximale en mégaoctets"/>
-                <TextBlock Text="Mo" Foreground="{StaticResource Muted}" Margin="1,0,11,0" VerticalAlignment="Center"/>
+                <TextBlock x:Name="LimitUnit" Text="Mo" Foreground="{StaticResource Muted}" Margin="1,0,11,0" VerticalAlignment="Center"/>
               </StackPanel>
             </Border>
           </WrapPanel>
-          <TextBlock Text="20 Mo correspond à l’offre gratuite de Discord." Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap"/>
+          <TextBlock x:Name="OptionsHint" Margin="0,4,0,0" Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap"/>
           <Border Height="1" Background="#303D42" Margin="0,15,0,13"/>
           <Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -113,7 +148,7 @@
                        AutomationProperties.Name="Progression de la compression"/>
           <TextBlock x:Name="StateDetails" Text="Le MP4 sera enregistré sur ton PC." Foreground="{StaticResource Muted}" Margin="0,4,0,0" TextWrapping="Wrap"/>
           <WrapPanel x:Name="ResultActions" Margin="0,11,0,0" Visibility="Collapsed">
-            <Button x:Name="OpenVideo" Content="_Lire le MP4" Margin="0,0,7,4"/>
+            <Button x:Name="OpenFile" Content="_Ouvrir le fichier" Margin="0,0,7,4"/>
             <Button x:Name="OpenFolder" Content="_Afficher dans le dossier" Margin="0,0,7,4"/>
           </WrapPanel>
         </StackPanel>

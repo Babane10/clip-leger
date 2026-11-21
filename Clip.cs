@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Markup;
 using System.Windows.Media;
@@ -28,22 +29,31 @@ namespace ClipLeger
     sealed class ClipWindow
     {
         private static readonly CultureInfo French = CultureInfo.GetCultureInfo("fr-FR");
+        private static readonly string DefaultDestination = Path.Combine(Downloads(), "FileFit");
+        private const string VideoFilter = "Vidéos|*.mp4;*.mov;*.mkv;*.webm;*.avi;*.m4v;*.wmv;*.ts;*.mts;*.m2ts;*.mpg;*.mpeg;*.3gp;*.flv";
         private readonly Compressor compressor = new Compressor(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ffmpeg.exe"));
         private readonly Border dropZone;
         private readonly TextBox limit;
         private readonly ProgressBar gauge;
         private readonly Button start;
         private readonly Button cancel;
-        private readonly Button[] settings;
+        private readonly Button selectFile;
+        private readonly Button selectFolder;
+        private readonly Button[] presets;
+        private readonly RadioButton[] modes;
         private readonly TextBlock state;
         private readonly TextBlock details;
         private readonly TextBlock percent;
         private readonly WrapPanel resultActions;
         private readonly Brush dropBackground;
         private readonly Brush dropActive = new SolidColorBrush(Color.FromRgb(38, 62, 54));
-        private string destination = Path.Combine(Downloads(), "Discord");
+        private string destination = DefaultDestination;
         private string result;
-        private Video video;
+        private MediaFile media;
+        private MediaMode mode;
+        private string emptyTitle;
+        private string formats;
+        private string filter;
         private CancellationTokenSource operation;
         private bool closeWhenIdle;
 
@@ -65,21 +75,20 @@ namespace ClipLeger
             percent = Find<TextBlock>("Percent");
             resultActions = Find<WrapPanel>("ResultActions");
 
-            Button selectVideo = Find<Button>("SelectVideo");
-            Button selectFolder = Find<Button>("SelectFolder");
-            Button free = Find<Button>("Preset20");
-            Button basic = Find<Button>("Preset50");
-            Button nitro = Find<Button>("Preset1000");
-            settings = new[] { selectVideo, selectFolder, free, basic, nitro };
+            selectFile = Find<Button>("SelectFile");
+            selectFolder = Find<Button>("SelectFolder");
+            presets = new[] { Find<Button>("PresetFirst"), Find<Button>("PresetSecond"), Find<Button>("PresetThird") };
+            modes = new[] { Find<RadioButton>("ModeVideo"), Find<RadioButton>("ModePhoto"), Find<RadioButton>("ModeAudio"), Find<RadioButton>("ModeExtract") };
 
-            selectVideo.Click += delegate { ChooseVideo(); };
+            selectFile.Click += async delegate { await ChooseFile(); };
             selectFolder.Click += delegate { ChooseFolder(); };
-            free.Click += delegate { limit.Text = "20"; };
-            basic.Click += delegate { limit.Text = "50"; };
-            nitro.Click += delegate { limit.Text = "1000"; };
+            foreach (Button preset in presets)
+                preset.Click += delegate(object sender, RoutedEventArgs args) { limit.Text = (string)((Button)sender).Tag; };
+            foreach (RadioButton tab in modes)
+                tab.Checked += OnModeChanged;
             start.Click += async delegate { await Export(); };
             cancel.Click += delegate { CancelOperation(); };
-            Find<Button>("OpenVideo").Click += delegate { OpenResult(false); };
+            Find<Button>("OpenFile").Click += delegate { OpenResult(false); };
             Find<Button>("OpenFolder").Click += delegate { OpenResult(true); };
 
             dropZone.DragOver += OnDragOver;
@@ -87,25 +96,91 @@ namespace ClipLeger
             dropZone.Drop += OnDrop;
             Window.Closing += OnClosing;
             UpdateDestination();
+            ConfigureMode();
         }
 
-        private async void ChooseVideo()
+        private async void OnModeChanged(object sender, RoutedEventArgs args)
+        {
+            var next = (MediaMode)Array.IndexOf(modes, sender);
+            if (operation != null || mode == next)
+                return;
+
+            bool switchVideoMode = (mode == MediaMode.Video && next == MediaMode.Extract) ||
+                (mode == MediaMode.Extract && next == MediaMode.Video);
+            string selected = switchVideoMode && media != null ? media.Path : null;
+            mode = next;
+            media = null;
+            result = null;
+            ConfigureMode();
+            if (selected != null)
+                await LoadMedia(selected);
+        }
+
+        private void ConfigureMode()
+        {
+            bool extracting = mode == MediaMode.Extract;
+            bool smallUnits = mode == MediaMode.Photo || mode == MediaMode.Audio;
+            string hint;
+            if (mode == MediaMode.Photo)
+            {
+                emptyTitle = "Dépose ta photo ici";
+                formats = "JPG, PNG, WebP, BMP, TIFF…";
+                filter = "Photos|*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.tif;*.tiff";
+                hint = "1 Mo = 1 000 Ko. Le résultat est en JPG ou en WebP si l’image est transparente.";
+                start.Content = "_Compresser la photo";
+            }
+            else if (mode == MediaMode.Audio)
+            {
+                emptyTitle = "Dépose ton fichier audio ici";
+                formats = "MP3, WAV, M4A, FLAC, OGG…";
+                filter = "Fichiers audio|*.mp3;*.wav;*.m4a;*.aac;*.flac;*.ogg;*.opus;*.wma;*.aif;*.aiff";
+                hint = "Le débit du MP3 s’adapte à la taille maximale.";
+                start.Content = "_Compresser en MP3";
+            }
+            else
+            {
+                emptyTitle = "Dépose ta vidéo ici";
+                formats = "MP4, MOV, MKV, WebM…";
+                filter = VideoFilter;
+                hint = extracting ? "La première piste audio est exportée en MP3 à 192 kb/s." : "Le MP4 garde la durée de la vidéo.";
+                start.Content = extracting ? "_Extraire le MP3" : "_Compresser en MP4";
+            }
+
+            Find<WrapPanel>("SizeControls").Visibility = extracting ? Visibility.Collapsed : Visibility.Visible;
+            Find<TextBlock>("OptionsTitle").Text = extracting ? "Format de sortie" : "Taille maximale";
+            Find<TextBlock>("OptionsHint").Text = hint;
+            Find<TextBlock>("LimitUnit").Text = smallUnits ? "Ko" : "Mo";
+            AutomationProperties.SetName(limit, smallUnits ? "Taille maximale en kilooctets" : "Taille maximale en mégaoctets");
+            string[] values = smallUnits ? new[] { "1000", "500", "200" } : new[] { "20", "50", "1000" };
+            string[] labels = smallUnits ? new[] { "1 Mo", "500 Ko", "200 Ko" } : new[] { "20 Mo", "50 Mo", "1 Go" };
+            for (int index = 0; index < presets.Length; index++)
+            {
+                presets[index].Content = labels[index];
+                presets[index].Tag = values[index];
+            }
+            limit.Text = values[0];
+            ShowSource(emptyTitle, formats);
+            SetStatus("Sélectionne un fichier pour commencer", "Le résultat sera enregistré sur ton PC.");
+            SetSettingsEnabled(true);
+        }
+
+        private async Task ChooseFile()
         {
             var dialog = new OpenFileDialog
             {
-                Title = "Choisir une vidéo",
-                Filter = "Vidéos|*.mp4;*.mov;*.mkv;*.webm;*.avi;*.m4v;*.wmv;*.ts;*.mts;*.m2ts;*.mpg;*.mpeg;*.3gp;*.flv|Tous les fichiers|*.*",
+                Title = "Choisir un fichier",
+                Filter = filter + "|Tous les fichiers|*.*",
                 CheckFileExists = true, Multiselect = false
             };
             if (dialog.ShowDialog(Window) == true)
-                await LoadVideo(dialog.FileName);
+                await LoadMedia(dialog.FileName);
         }
 
         private void ChooseFolder()
         {
             using (var dialog = new Forms.FolderBrowserDialog())
             {
-                dialog.Description = "Choisis où enregistrer les MP4 compressés.";
+                dialog.Description = "Choisis où enregistrer les fichiers exportés.";
                 dialog.SelectedPath = Directory.Exists(destination) ? destination : Downloads();
                 dialog.ShowNewFolderButton = true;
                 if (dialog.ShowDialog(new WindowOwner(Window)) == Forms.DialogResult.OK)
@@ -119,8 +194,8 @@ namespace ClipLeger
         private void UpdateDestination()
         {
             TextBlock path = Find<TextBlock>("Destination");
-            path.Text = string.Equals(destination, Path.Combine(Downloads(), "Discord"), StringComparison.OrdinalIgnoreCase)
-                ? "Téléchargements  ›  Discord" : destination;
+            path.Text = string.Equals(destination, DefaultDestination, StringComparison.OrdinalIgnoreCase)
+                ? "Téléchargements  ›  FileFit" : destination;
             path.ToolTip = destination;
         }
 
@@ -143,11 +218,11 @@ namespace ClipLeger
             string[] files = DropFiles(args);
             if (files == null || files.Length != 1 || !File.Exists(files[0]))
             {
-                SetStatus("Dépose un seul fichier vidéo.", "Tu peux aussi utiliser le bouton Choisir une vidéo.", true);
+                SetStatus("Dépose un seul fichier.", "Tu peux aussi utiliser le bouton Choisir un fichier.", true);
                 return;
             }
 
-            await LoadVideo(files[0]);
+            await LoadMedia(files[0]);
         }
 
         private static string[] DropFiles(DragEventArgs args)
@@ -155,62 +230,67 @@ namespace ClipLeger
             return args.Data.GetData(DataFormats.FileDrop) as string[];
         }
 
-        internal async Task LoadVideo(string path)
+        internal async Task LoadMedia(string path)
         {
-            video = null;
+            media = null;
             result = null;
             ShowSource(Path.GetFileName(path), "Lecture du fichier…");
-            CancellationToken token = BeginOperation("Lecture de la vidéo…", "");
+            MediaMode selected = mode;
+            CancellationToken token = BeginOperation("Lecture du fichier…", "");
             try
             {
-                video = await Task.Run(() => compressor.Inspect(path, token), token);
-                string summary = Size(video.Bytes) + "  ·  " + Duration(video.Seconds);
-                if (video.Width > 0 && video.Height > 0)
-                    summary += "  ·  " + video.Width + " × " + video.Height;
-                ShowSource(Path.GetFileName(video.Path), summary);
-                SetStatus("Vidéo prête à compresser", "Choisis la taille maximale, puis lance la compression.");
+                media = await Task.Run(() => compressor.Inspect(path, selected, token), token);
+                string summary = Size(media.Bytes);
+                if (selected != MediaMode.Photo)
+                    summary += "  ·  " + Duration(media.Seconds);
+                if (selected != MediaMode.Audio && media.Width > 0 && media.Height > 0)
+                    summary += "  ·  " + media.Width + " × " + media.Height;
+                ShowSource(Path.GetFileName(media.Path), summary);
+                SetStatus("Fichier prêt", selected == MediaMode.Extract ? "Lance l’extraction du MP3." : "Choisis la taille maximale, puis lance la compression.");
             }
             catch (OperationCanceledException)
             {
-                ShowSource("Dépose ta vidéo ici", "MP4, MOV, MKV, WebM…");
-                SetStatus("Lecture annulée", "Sélectionne une vidéo pour recommencer.");
+                ShowSource(emptyTitle, formats);
+                SetStatus("Lecture annulée", "Sélectionne un fichier pour recommencer.");
             }
             catch (Exception error)
             {
-                ShowSource("Dépose ta vidéo ici", "MP4, MOV, MKV, WebM…");
-                SetStatus("Impossible d’ouvrir la vidéo", error.Message, true);
+                ShowSource(emptyTitle, formats);
+                SetStatus("Impossible d’ouvrir ce fichier", error.Message, true);
             }
             finally { EndOperation(); }
         }
 
         private void ShowSource(string name, string metadata)
         {
-            TextBlock title = Find<TextBlock>("VideoTitle");
+            TextBlock title = Find<TextBlock>("SourceTitle");
             title.Text = name;
             title.ToolTip = name;
-            Find<TextBlock>("VideoDetails").Text = metadata;
+            Find<TextBlock>("SourceDetails").Text = metadata;
         }
 
         internal async Task Export()
         {
-            if (operation != null || video == null)
+            if (operation != null || media == null)
                 return;
 
-            decimal megabytes;
-            if (!decimal.TryParse(limit.Text.Trim().Replace(',', '.'), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out megabytes)
-                || megabytes < 0.1m || megabytes > 1000m)
+            bool extracting = mode == MediaMode.Extract;
+            bool smallUnits = mode == MediaMode.Photo || mode == MediaMode.Audio;
+            long bytes = 0;
+            if (!extracting && !ReadLimit(smallUnits, out bytes))
             {
-                SetStatus("Vérifie la taille maximale", "Entre une valeur entre 0,1 et 1 000 Mo.", true);
+                string range = smallUnits ? "1 et 1 000 000 Ko." : "0,1 et 1 000 Mo.";
+                SetStatus("Vérifie la taille maximale", "Entre une valeur entre " + range, true);
                 limit.Focus();
                 limit.SelectAll();
                 return;
             }
 
-            long bytes = (long)(megabytes * 1000000m);
             string folder = destination;
-            Video selected = video;
+            MediaFile selected = media;
+            MediaMode selectedMode = mode;
             result = null;
-            var token = BeginOperation("Préparation…", "Maximum " + megabytes.ToString("0.######", French) + " Mo");
+            var token = BeginOperation("Préparation…", extracting ? "Export en MP3" : "Maximum " + Size(bytes));
             gauge.Visibility = Visibility.Visible;
             percent.Text = "0 %";
             var progress = new Progress<CompressionProgress>(update =>
@@ -224,13 +304,14 @@ namespace ClipLeger
 
             try
             {
-                result = await Task.Run(() => compressor.Export(selected, bytes, folder, progress, token), token);
-                SetStatus("MP4 prêt à envoyer", Size(new FileInfo(result).Length) + "  ·  " + Path.GetFileName(result));
+                result = await Task.Run(() => compressor.Export(selected, selectedMode, bytes, folder, progress, token), token);
+                string format = Path.GetExtension(result).Substring(1).ToUpperInvariant();
+                SetStatus(format + " prêt", Size(new FileInfo(result).Length) + "  ·  " + Path.GetFileName(result));
                 resultActions.Visibility = Visibility.Visible;
             }
             catch (OperationCanceledException)
             {
-                SetStatus("Compression annulée", "Tu peux relancer la compression quand tu veux.");
+                SetStatus("Export annulé", "Tu peux relancer l’export quand tu veux.");
             }
             catch (UnauthorizedAccessException)
             {
@@ -238,9 +319,25 @@ namespace ClipLeger
             }
             catch (Exception error)
             {
-                SetStatus("Compression impossible", error.Message, true);
+                SetStatus("Export impossible", error.Message, true);
             }
             finally { EndOperation(); }
+        }
+
+        private bool ReadLimit(bool smallUnits, out long bytes)
+        {
+            bytes = 0;
+            decimal amount;
+            if (!decimal.TryParse(limit.Text.Trim().Replace(',', '.'), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out amount))
+                return false;
+
+            decimal minimum = smallUnits ? 1m : 0.1m;
+            decimal maximum = smallUnits ? 1000000m : 1000m;
+            if (amount < minimum || amount > maximum)
+                return false;
+
+            bytes = (long)(amount * (smallUnits ? 1000m : 1000000m));
+            return true;
         }
 
         private CancellationToken BeginOperation(string title, string description)
@@ -265,10 +362,14 @@ namespace ClipLeger
 
         private void SetSettingsEnabled(bool value)
         {
-            foreach (Button button in settings)
-                button.IsEnabled = value;
+            selectFile.IsEnabled = value;
+            selectFolder.IsEnabled = value;
+            foreach (Button preset in presets)
+                preset.IsEnabled = value;
+            foreach (RadioButton tab in modes)
+                tab.IsEnabled = value;
             limit.IsEnabled = value;
-            start.IsEnabled = value && video != null;
+            start.IsEnabled = value && media != null;
         }
 
         private void CancelOperation()
@@ -305,14 +406,14 @@ namespace ClipLeger
             try
             {
                 if (!File.Exists(result))
-                    throw new FileNotFoundException("Le MP4 a été déplacé ou supprimé.");
+                    throw new FileNotFoundException("Le fichier a été déplacé ou supprimé.");
                 Process.Start(inExplorer
                     ? new ProcessStartInfo("explorer.exe", "/select,\"" + result + "\"") { UseShellExecute = true }
                     : new ProcessStartInfo(result) { UseShellExecute = true });
             }
             catch (Exception error)
             {
-                MessageBox.Show(Window, error.Message, "Impossible d’ouvrir le MP4", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show(Window, error.Message, "Impossible d’ouvrir le fichier", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
 

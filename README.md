@@ -1,14 +1,19 @@
-# Clip Léger
+# FileFit
 
-Clip Léger est une petite appli Windows pour compresser une vidéo en MP4 avant de l’envoyer sur Discord. L’appli vérifie la taille réelle du MP4 avant de l’exporter.
+FileFit compresse et convertit des fichiers sous Windows x64. L’appli vérifie la taille réelle avant d’exporter un fichier soumis à une limite.
 
 ## Installer sur Windows
 
-1. Récupère `Clip-Leger-v1.0.0-Windows-x64.zip` dans **Releases**, puis extrais le ZIP.
-2. Lance `Installer-FFmpeg.cmd` une seule fois pour télécharger le moteur vidéo officiel et vérifier sa somme SHA-256. Tu peux aussi placer un `ffmpeg.exe` récent avec `libx264` à côté de `ClipLeger.exe`.
-3. Ouvre `ClipLeger.exe`, glisse une vidéo, choisis une taille maximale et clique sur **Compresser en MP4**.
+1. Télécharge `FileFit-v1.1.0-Windows-x64.zip` depuis la [page des versions](https://github.com/Babane10/clip-leger/releases/latest), puis extrais le ZIP.
+2. Lance `Installer-FFmpeg.cmd` une fois pour télécharger le moteur et vérifier sa somme SHA-256. Tu peux aussi placer un `ffmpeg.exe` récent à côté de `FileFit.exe`.
+3. Ouvre `FileFit.exe`, choisis un mode en haut, puis dépose un fichier.
 
-Le dossier de sortie par défaut est **Téléchargements → Discord**. Tu peux le changer dans l’appli. Le fichier d’origine est conservé et les vidéos sont traitées localement. Une connexion est nécessaire pour télécharger FFmpeg lors de la première installation.
+- **Vidéo** compresse en MP4 sous une taille en Mo choisie.
+- **Photo** réduit une image en JPG ou en WebP si elle est transparente. Tu peux choisir 1 Mo, 500 Ko, 200 Ko ou saisir une taille en Ko.
+- **Audio** compresse un fichier audio en MP3 sous une taille choisie en Ko. Le débit s’adapte à la durée et à la limite.
+- **Vidéo → MP3** extrait la première piste audio d’une vidéo en MP3 à 192 kb/s.
+
+Les exports sont enregistrés dans **Téléchargements → FileFit** par défaut. Ce dossier peut être changé dans l’application. Le traitement se fait sur ton PC et le fichier original est conservé.
 
 ## Compiler
 

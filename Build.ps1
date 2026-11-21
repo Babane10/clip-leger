@@ -8,11 +8,11 @@ if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) {
 }
 
 $output = New-Item -ItemType Directory -Path $OutputFolder -Force
-$exe = Join-Path $output.FullName 'ClipLeger.exe'
+$exe = Join-Path $output.FullName 'FileFit.exe'
 $references = @('WPF\WindowsBase.dll', 'WPF\PresentationCore.dll', 'WPF\PresentationFramework.dll', 'System.Xaml.dll', 'System.Windows.Forms.dll')
 $references = $references | ForEach-Object { '/reference:' + (Join-Path $framework $_) }
 $options = @('/nologo', '/target:winexe', '/platform:x64', '/optimize+', '/codepage:65001', "/out:$exe", "/resource:$PSScriptRoot\Clip.xaml,Clip.xaml", "/win32manifest:$PSScriptRoot\Clip.manifest")
 
-& $compiler @options @references "$PSScriptRoot\Clip.cs" "$PSScriptRoot\Video.cs"
+& $compiler @options @references "$PSScriptRoot\Clip.cs" "$PSScriptRoot\Video.cs" "$PSScriptRoot\Media.cs"
 if ($LASTEXITCODE -ne 0) { throw "Compilation failed ($LASTEXITCODE)." }
 Write-Output $exe
